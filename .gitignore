@@ -1,0 +1,7 @@
+# Env file
+.env
+
+# Ignore DB files but not the directory
+!database/.gitkeep
+database/
+
