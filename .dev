@@ -1,0 +1,114 @@
+#!/bin/bash
+
+#=================FUNCTIONS=================#
+
+function createSymlink ()
+{
+  if [ -L /usr/local/bin/dev  ]; then
+    sudo unlink /usr/local/bin/dev
+  fi
+
+  CURRENT_DIRECTORY=$(pwd)
+
+  cd /usr/local/bin || exit 1
+  sudo ln -s "$CURRENT_DIRECTORY/dev" .
+  cd "$CURRENT_DIRECTORY" || exit 1
+
+  echo "Symlink created"
+}
+
+#===============END FUNCTIONS===============#
+
+if [ ! -f docker/.env ]; then
+  GROUP_ID=$(id -g)
+  USER_ID=$(id -u)
+  cp docker/.env.example docker/.env
+
+  echo -e "\nGID=$GROUP_ID\nUID=$USER_ID" >> docker/.env
+fi
+
+DOCKER_COMPOSE="docker compose -f docker/docker-compose.yml"
+
+if [ "$#" -eq 0 ]; then
+  $DOCKER_COMPOSE ps
+  exit 0
+
+#build docker images
+elif [ "$1" == "build" ]; then
+  shift 1
+  $DOCKER_COMPOSE build "$@"
+
+#start containers
+elif [ "$1" == "up" ]; then
+  $DOCKER_COMPOSE up -d
+
+#enter into running container
+elif [ "$1" == "exec" ]; then
+  shift 1
+  $DOCKER_COMPOSE exec "$@"
+
+#start new container and execute command
+elif [ "$1" == "run" ]; then
+  shift 1
+  $DOCKER_COMPOSE run "$@"
+
+#turn off containers and remove any dangling container
+elif [ "$1" == "down" ]; then
+  shift 1
+  $DOCKER_COMPOSE down --remove-orphans "$@"
+
+#enter inside running php container
+elif [ "$1" == "php" ]; then
+  $DOCKER_COMPOSE exec php bash
+
+#enter inside running mysql container
+elif [ "$1" == "mysql" ]; then
+  $DOCKER_COMPOSE exec mysql bash
+
+#enter inside running web container
+elif [ "$1" == "web" ]; then
+  $DOCKER_COMPOSE exec web bash
+
+#run composer
+elif [ "$1" == "composer" ]; then
+  shift 1;
+  $DOCKER_COMPOSE exec --user www-data php composer "$@"
+
+#enable xdebug
+elif [ "$1" == "xon" ]; then
+  $DOCKER_COMPOSE exec --user root php bash -c \
+    "[ -f /usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini.enabled ] && cat /usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini.enabled > /usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini  && echo 'Xdebug enabled'"
+
+  $DOCKER_COMPOSE restart php
+
+#enable xdebug for usage with vscode and nvim
+elif [ "$1" == "vxon" ]; then
+  IP_ADDRESS=$(ip addr show eth0 | grep -oP '(?<=inet\s)\d+(\.\d+){3}')
+
+  $DOCKER_COMPOSE exec --user root php bash -c \
+    "[ -f /usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini.enabled ] && cat /usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini.enabled > /usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini  && sed -i 's|xdebug.client_host=host.docker.internal|xdebug.client_host=$IP_ADDRESS|g' /usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini && echo 'Xdebug enabled'"
+
+  $DOCKER_COMPOSE restart php
+
+#disable xdebug
+elif [ "$1" == "xoff" ]; then
+  $DOCKER_COMPOSE exec --user root php bash -c \
+    "[ -f /usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini.disabled ] && cat /usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini.disabled > /usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini  && echo 'Xdebug disabled'"
+
+    $DOCKER_COMPOSE restart php
+
+#link dev script to $PATH so it is executable without using ./dev or bash dev
+elif [ "$1" == "link" ]; then
+  ### IMPORTANT ###
+  #
+  # When using this run script like "./dev link" or "bash dev link"
+  # since this function will remove symlink if exists and create new one.
+  # This is because we want to ensure there is no broken link from before
+  #
+  ### IMPORTANT ###
+  createSymlink
+
+else
+  $DOCKER_COMPOSE "$@"
+
+fi

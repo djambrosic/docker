@@ -1,7 +1,13 @@
 # Env file
 .env
+.idea
+.vscode
 
 # Ignore DB files but not the directory
 !database/.gitkeep
 database/
 
+!configuration/nginx/conf.d/base.local.conf.template
+!configuration/nginx/conf.d/framework.local.conf.template
+!configuration/nginx/conf.d/default.conf
+configuration/nginx/conf.d/*.conf
