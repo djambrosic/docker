@@ -1,7 +1,7 @@
 # /etc/nginx/conf.d/example.com.conf
 server {
     server_name docker.local;
-    root /var/www/html;
+    root /var/www/html/public;
 
     location / {
         # try to serve file directly, fallback to index.php

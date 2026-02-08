@@ -1,6 +1,6 @@
-FROM php:8.2-fpm AS base
+FROM php:8.4-fpm AS base
 
-ARG PHP_EXT_DIR=/usr/local/lib/php/extensions/no-debug-non-zts-20220829/
+ARG PHP_EXT_DIR=/usr/local/lib/php/extensions/no-debug-non-zts-20240924/
 ARG PHP_CONF_DIR=/usr/local/etc/php/conf.d/
 ARG PHP_INCLUDE_EXT_DIR=/usr/local/include/php/ext/
 
@@ -14,6 +14,7 @@ RUN apt-get update && apt-get install -y \
     libmcrypt-dev \
     libpng-dev \
     libxml2-dev \
+    libicu-dev \
     unzip \
     && docker-php-ext-install -j$(nproc) pdo_mysql zip mysqli soap \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
