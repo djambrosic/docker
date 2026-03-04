@@ -1,62 +1,70 @@
-FROM php:8.4-fpm AS base
+# --- STAGE 1: BUILDER ---
+FROM php:8.4-fpm-alpine AS builder
 
-ARG PHP_EXT_DIR=/usr/local/lib/php/extensions/no-debug-non-zts-20240924/
-ARG PHP_CONF_DIR=/usr/local/etc/php/conf.d/
-ARG PHP_INCLUDE_EXT_DIR=/usr/local/include/php/ext/
-
-RUN apt-get update && apt-get install -y \
-    zlib1g-dev \
+# Install build dependencies
+RUN apk add --no-cache \
+    $PHPIZE_DEPS \
+    freetype-dev \
+    libjpeg-turbo-dev \
     libpng-dev \
     libzip-dev \
-    curl \
-    libfreetype6-dev \
-    libjpeg62-turbo-dev \
-    libmcrypt-dev \
-    libpng-dev \
     libxml2-dev \
-    libicu-dev \
+    icu-dev \
+    oniguruma-dev \
+    linux-headers
+
+# Install & Configure PHP Extensions
+RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-install -j$(nproc) \
+    pdo_mysql \
+    mysqli \
+    zip \
+    soap \
+    gd \
+    intl \
+    opcache
+
+# Install PECL extensions
+RUN pecl install redis xdebug \
+    && docker-php-ext-enable redis xdebug
+
+# --- STAGE 2: FINAL ---
+FROM php:8.4-fpm-alpine AS final
+
+# Install Runtime libraries (Alpine native names)
+RUN apk add --no-cache \
+    bash \
+    curl \
+    git \
     unzip \
-    && docker-php-ext-install -j$(nproc) pdo_mysql zip mysqli soap \
-    && docker-php-ext-configure gd --with-freetype --with-jpeg \
-    && docker-php-ext-install -j$(nproc) gd
+    libpng \
+    libjpeg-turbo \
+    freetype \
+    libzip \
+    libxml2 \
+    icu-libs
 
-FROM base AS composer
-RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+# Copy compiled extensions and configs
+COPY --from=builder /usr/local/lib/php/extensions /usr/local/lib/php/extensions
+COPY --from=builder /usr/local/etc/php/conf.d /usr/local/etc/php/conf.d
+COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
-FROM base AS xdebug
-RUN pecl install xdebug && docker-php-ext-enable xdebug
-
-FROM base AS redis
-RUN pecl install redis && docker-php-ext-enable redis
-
-FROM base AS intl
-RUN docker-php-ext-configure intl && docker-php-ext-install intl
-
-FROM base AS final
-COPY --from=composer /usr/local/bin/composer /usr/local/bin/composer
-COPY --from=xdebug ${PHP_EXT_DIR} ${PHP_EXT_DIR}
-COPY --from=xdebug ${PHP_CONF_DIR} ${PHP_CONF_DIR}
-COPY --from=redis ${PHP_EXT_DIR} ${PHP_EXT_DIR}
-COPY --from=redis ${PHP_CONF_DIR} ${PHP_CONF_DIR}
-COPY --from=intl ${PHP_EXT_DIR} ${PHP_EXT_DIR}
-COPY --from=intl ${PHP_CONF_DIR} ${PHP_CONF_DIR}
-
-RUN apt-get -y autoremove && apt-get clean && rm -rf /var/lib/apt.list/* /tmp/* /var/tmp/*
-
+# --- The Alpine Way to Handle Users ---
 ARG USERNAME=app
-ARG USER_ID
-ARG GROUP_ID
+ARG USER_ID=1000
+ARG GROUP_ID=1000
 
-RUN groupadd -g $GROUP_ID -o $USERNAME
-RUN useradd -m -u $USER_ID -g $GROUP_ID -o -s /bin/bash $USERNAME
-
-RUN chown -R www-data:$USERNAME /var/www/
-
-USER $USERNAME
+# -G: group name, -g: group id
+# -D: don't assign a password, -u: user id, -G: add to group, -h: home directory
+RUN addgroup -g $GROUP_ID $USERNAME \
+    && adduser -u $USER_ID -D -G $USERNAME -h /home/$USERNAME -s /bin/bash $USERNAME
 
 WORKDIR /var/www/html
 
-CMD ["php-fpm"]
+# Set permissions for Symfony directories
+RUN chown -R $USERNAME:$USERNAME /var/www/html
+
+USER $USERNAME
 
 EXPOSE 9000
-EXPOSE 9001
+CMD ["php-fpm"]
