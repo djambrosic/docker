@@ -24,7 +24,7 @@ services:
       - "9001"
     volumes:
       - ./configuration/php/php.ini:/usr/local/etc/php/php.ini:rw
-#      - ./configuration/php/xdebug.ini:/usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini
+      - ./configuration/php/xdebug.ini.disabled:/usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini
       - ./configuration/php/xdebug.ini.disabled:/usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini.disabled
       - ./configuration/php/xdebug.ini.enabled:/usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini.enabled
       - ../:/var/www/html
